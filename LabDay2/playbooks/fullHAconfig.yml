@@ -1,0 +1,300 @@
+---
+
+  - name: Play 1 - Configuring BIG-IP from scratch to basic config
+    hosts: bigips
+    connection: local
+    gather_facts: no
+
+    tasks:
+      - name: Task 1 - License the BIG-IP using Development Key
+        bigip_raw:
+          commands: SOAPLicenseClient --basekey "K5082-41889-05581-40503-4099960"
+          provider: "{{ provider }}"
+        tags: licensing
+
+      - name: Task 2 - Wait for restart of the processes after licensing
+        pause:
+          minutes: 1
+          prompt: "Waiting for processes to restart after licensing"
+
+      - name: TASK 3 - Disable GUI Setup
+        bigip_sys_db:
+          key: setup.run
+          value: "false"
+          provider: "{{provider}}"
+        tags: guisetup
+
+      - name: TASK 4 - Modify BIGIPs hostname
+        bigip_hostname:
+          hostname: "{{ hostname }}"
+          provider: "{{ provider }}"
+        tags: hostname
+
+      - name: TASK 5 - Configure NTP Servers & TimeZone
+        bigip_device_ntp:
+          ntp_servers:
+            - "{{ ntp1 }}"
+            - "{{ ntp2 }}"
+          timezone: "America/Los_Angeles"
+          provider: "{{ provider }}"
+        tags: ntp
+
+      - name: TASK 6 -  Configure DNS Servers
+        bigip_device_dns:
+          name_servers:
+            - "{{ dns1 }}"
+            - "{{ dns2 }}"
+          search:
+            - training.local
+          provider: "{{ provider }}"
+        tags: dns
+
+      - name: TASK 7 - Modify sshd settings
+        bigip_device_sshd:
+          banner: enabled
+          banner_text: "{{ sshd_banner }}"
+          provider: "{{ provider }}"
+        tags: sshsettings
+
+      - name: TASK 8 - Increase httpd timeout
+        bigip_device_httpd:
+          auth_pam_idle_timeout: "{{ httpd_timeout }}"
+          provider: "{{ provider }}"
+        tags: httpdsettings
+
+      - name: TASK 9 - Create Local BIG-IP Operator Account
+        bigip_user:
+          username_credential: "{{ user1 }}"
+          full_name: "{{ user1_name }}"
+          password_credential: "{{ user1_password }}"
+          update_password: on_create
+          partition_access: "{{ user1_partition_role }}"
+          provider: "{{ provider }}"
+        tags: useraccount
+
+      - name: TASK 10 - Change root password
+        bigip_user:
+          username_credential: "{{ root_user }}"
+          password_credential: "{{ root_password }}"
+          provider: "{{ provider }}"
+        tags: rootpwd
+
+      - name: TASK 11 - Save running config
+        bigip_config:
+          save: yes
+          provider: "{{ provider }}"
+        tags: configsave
+
+      - name: Task 12 - Create two VLANs using 'with_items' loop.
+        bigip_vlan:
+          name: "{{item.vlan_name}}"
+          untagged_interfaces: "{{item.vlan_int}}"
+          tag: "{{item.vlan_tag}}"
+          provider: "{{ provider }}"
+        with_items: "{{ vlans_with_items }}"
+        tags: vlans
+
+      - name: Task 13 - Create external vlan self IP
+        bigip_selfip:
+          address: "{{ external_selfIP }}"
+          netmask: "{{ netmask }}"
+          name: "{{ external_selfIP }}"
+          vlan: "{{ vlanexternal_name }}"
+          provider: "{{ provider }}"
+        tags: externalselfip
+
+      - name: Task 14 - Create internal vlan self IP
+        bigip_selfip:
+          address: "{{ internal_selfIP }}"
+          netmask: "{{ netmask }}"
+          name: "{{ internal_selfIP }}"
+          vlan: "{{ vlaninternal_name }}"
+          allow_service: "{{ internal_self_portlockdown }}"
+          provider: "{{ provider }}"
+        tags: internalselfip
+
+      - name: Task 15 - Specify Configsync, Mirroring and Failover IPs
+        bigip_device_connectivity:
+          config_sync_ip: "{{ internal_selfIP }}"
+          unicast_failover:
+            -  address: "{{ internal_selfIP }}"
+            -  address: "{{ ansible_host }}"
+          mirror_primary_address: "{{ internal_selfIP }}"
+          provider: "{{ provider }}"
+        tags: devconnectivity
+
+      - name: Task 16 - Add-to-trust to be executed only from bigip-a to add bigip-b
+        bigip_device_trust:
+          peer_server: "{{ peer_mgmt }}"
+          peer_hostname: "{{ peer_hostname }}"
+          peer_user: "admin"
+          peer_password: "admin"
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: add2trust
+
+      - name: Task 17 - Create a Sync-Failover Dev Group and add bigips to it
+        bigip_device_group:
+          name: "{{ devgroup }}"
+          type: "sync-failover"
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: syncfailovergrp
+
+      - name: Task 18 - Add the current device to the "{{ devgroup }}" device group
+        bigip_device_group_member:
+          name: "{{hostname }}"
+          device_group: "{{ devgroup }}"
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: addlocaldevice
+
+      - name: Task 19 - Add the remote device to the "{{ devgroup }}" device group
+        bigip_device_group_member:
+          name: "{{ peer_hostname }}"
+          device_group: "{{ devgroup }}"
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: addremotedevice
+
+      - name: Task 20 - Add a new Traffic Group to  bigip-a
+        bigip_traffic_group:
+          name: "traffic_group_2"
+          state: present
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: trafficgroup
+
+      - name: Task 21 Designate bigip-a as Sync Leader
+        bigip_command:
+          commands: "modify cm devicegroup {{ devgroup }} devices modify { {{hostname }} {set-sync-leader }}"
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: syncleader
+
+      - name: Task 22 - Synchronize configuration from device to group using "{{ devgroup }}"
+        bigip_configsync_action:
+          device_group: "{{ devgroup }}"
+          sync_device_to_group: yes
+          overwrite_config: yes
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: configsync
+
+      - name: Task 23 - Create TACACS Auth Server
+        bigip_command:
+          commands: create auth tacacs system-auth servers add { 172.16.20.79 }  service ppp protocol ip secret f5train
+          provider: "{{ provider }}"
+        when:  inventory_hostname in groups['master']
+        tags: tacacs
+
+      - name: Task 24 - Specify Authentication source to be  TACACS Auth Server
+        bigip_command:
+          commands: modify auth source type tacacs fallback true description mytacacs
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: authtacacs
+
+      - name: Task 25 - Create remote-role of Administrator based on TACACS attribute
+        bigip_command:
+          commands: modify auth remote-role { role-info add { Administrators { line-order 1 attribute F5-LTM-User-Info-1=adm role administrator user-partition all console tmsh } } }
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: remoterole
+
+      - name: Task 26 - Create floating selfIPs using 'with_items'loop and assing to traffic_group_2
+        bigip_selfip:
+          name: "{{item.selfipname}}"
+          address: "{{item.floaterip1}}"
+          netmask: "{{netmask}}"
+          vlan: "{{item.vlan_name}}"
+          traffic_group: traffic_group_2
+          provider: "{{ provider }}"
+        with_items: "{{ vlans_with_items }}"
+        when: inventory_hostname in groups['master']
+        tags: floatingselfip
+
+      - name: Task 27 - Create iRule using template
+        bigip_irule:
+          content: "{{ lookup('template', '../templates/httpredirect.tcl') }}"
+          module: ltm
+          name: httpredirect1
+          provider: "{{ provider }}"
+        run_once: true
+        tags: irule
+
+      - name: Task 28 - Create HTTP Profile, option available is to use command module
+        bigip_command:
+          commands: 'create ltm profile http customHTTP response-chunking unchunk header-insert "Accept-Encoding: gzip,deflate"'
+          provider: "{{ provider }}"
+        run_once: true
+        tags: httpprof
+
+      - name: Task 29 - Create a series of 9 Nodes
+        bigip_node:
+          name: "webServer{{ item }}"
+          host: "172.16.20.{{ item }}"
+          state: present
+          provider: "{{ provider }}"
+        with_sequence: start=1 end=9
+        when: inventory_hostname in groups['master']
+        tags: nodes
+
+      - name: Task 30 - Create a series of 9 Pools
+        bigip_pool:
+          name: "WebPool{{ item }}"
+          monitors:
+            - http
+          state: present
+          provider: "{{ provider }}"
+        with_sequence: start=1 end=9 stride=1
+        when: inventory_hostname in groups['master']
+        tags: pools
+
+      - name: Task 31 - Add Pool Members to the 9 Pools
+        bigip_pool_member:
+          pool: "WebPool{{ item }}"
+          host: "webServer{{ item }}"
+          port: 80
+          state: present
+          server: "{{ ansible_host }}"
+          validate_certs: no
+          user: admin
+          password: admin
+#        provider: "{{ provider }}"  -- Didnt work because of a bug
+        with_sequence: start=1 end=9 stride=1
+        when: inventory_hostname in groups['master']
+        tags: poolmembersadd
+
+      - name: Task 32 - Add 9 Virtual Servers using with_sequence loop
+        bigip_virtual_server:
+          name: "HTTPVirtual{{ item }}"
+          destination: "10.10.10.{{ item|int + 10 }}"
+          pool: "WebPool{{ item }}"
+          port: 80
+          snat: Automap
+          description: "HTTP Virtual Server vip{{ item }}"
+          profiles:
+            - http
+          state: present
+          provider: "{{ provider }}"
+        with_sequence: start=1 count=9
+        when: inventory_hostname in groups['master']
+        tags: virtualserversadd
+
+      - name: Task 33 - Save running config
+        bigip_config:
+          save: yes
+          provider: "{{ provider }}"
+
+      - name: Task 34 - Synchronize configuration from  bigip-a to bigip-b
+        bigip_configsync_action:
+          device_group: "{{ devgroup }}"
+          sync_device_to_group: yes
+          provider: "{{ provider }}"
+        when: inventory_hostname in groups['master']
+        tags: configsync
+
+
+
+

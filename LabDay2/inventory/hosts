@@ -1,0 +1,12 @@
+server ansible_host=10.154.195.108
+bigip-a ansible_host=10.154.193.18
+bigip-b ansible_host=10.154.193.28
+client ansible_host=10.154.195.108
+
+[bigips]
+bigip-a ansible_host=10.154.193.18
+bigip-b ansible_host=10.154.193.28
+
+[master]
+bigip-a ansible_host=10.154.193.18
+

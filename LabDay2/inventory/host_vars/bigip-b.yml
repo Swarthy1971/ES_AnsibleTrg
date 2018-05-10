@@ -1,0 +1,14 @@
+---
+hostname: bigip-b.training.local
+
+external_selfIP: 10.10.8.32
+vlanexternal_name: external
+internal_selfIP: 172.16.8.32
+vlaninternal_name: internal
+internal_self_portlockdown: "default"
+
+peer_hostname: bigip-a.training.local
+
+...
+
+

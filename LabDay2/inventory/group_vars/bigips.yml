@@ -1,0 +1,45 @@
+---
+provider:
+  validate_certs: no
+  server: "{{ ansible_host }}"
+  user: admin
+  password: admin
+
+ntp1: 192.168.11.168
+ntp2: pool.ntp.org
+ntp_timezone: "America/Los_Angeles"
+
+dns1: 172.24.1.241
+dns2: 172.24.1.242
+
+sshd_banner: "This Machine belongs to F5 Internal Training"
+
+user1: snetops
+user1_name: Super NetOps
+user1_password: abc123
+user1_partition_role: "Common:operator"
+
+httpd_timeout: 1200000
+
+root_user: root
+root_password: root
+
+vlans_with_items:
+  - vlan_name: external
+    vlan_int: 1.1
+    vlan_tag: 10
+    selfipname: external_floater
+    floaterip1: 10.10.8.33
+
+  - vlan_name: internal
+    vlan_int: 1.2
+    vlan_tag: 20
+    selfipname: internal_floater
+    floaterip1: 172.16.8.33
+
+netmask: 255.255.0.0
+internal_selfIP_portlockdown: "default"
+
+devgroup: my-dev-group
+
+...
