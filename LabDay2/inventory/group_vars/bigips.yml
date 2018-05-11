@@ -2,8 +2,8 @@
 provider:
   validate_certs: no
   server: "{{ ansible_host }}"
-  user: admin
-  password: admin
+  user: "{{ username }}"
+  password: "{{ password }}"
 
 ntp1: 192.168.11.168
 ntp2: pool.ntp.org
